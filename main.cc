@@ -6,6 +6,7 @@ https://tech.io/playgrounds/283/sse-avx-vectorization/what-is-sse-and-avx
 #pragma GCC option("arch=native","tune=native","no-zero-upper") // Enable AVX
 #pragma GCC target("avx")  //Enable AVX
 #include <x86intrin.h> // AVX/SSE Extensions
+#include <omp.h>
 
 #include "EasyBMP.hpp"
 #include <iostream>
@@ -60,21 +61,34 @@ int mandelbrot(const Complex& c)
 
 int main() 
 {
-    int WIDTH = 1024;
-    int HEIGHT = 720;
+	const int MULTIPLIER = 1;
+    const int WIDTH = 1024 * MULTIPLIER;
+    const int HEIGHT = 720 * MULTIPLIER;
 
     EasyBMP::Image image(WIDTH, HEIGHT, "mandelbrot.bmp", EasyBMP::RGBColor(0, 0, 0));
-
     // Multiplication is faster than division, just divide once
     double WIDTH_inverse = 1.0 / (double)WIDTH;
     double HEIGHT_inverse = 1.0 / (double)HEIGHT;
     double x_factor = WIDTH_inverse * (RE_END - RE_START);
     double y_factor = HEIGHT_inverse * (IM_END - IM_START);
 
+    cout << "Starting Mandelbrot computation..." << endl;
+
     auto start = chrono::high_resolution_clock::now();
 
-    #pragma omp parallel for
+    int operations = 0;
+
+    #pragma omp parallel for num_threads(8)
     for (int y = 0; y < HEIGHT; ++y) {
+    	int tid = omp_get_thread_num();
+
+    	#pragma omp atomic
+		++operations;
+
+    	if (tid == 0 && operations & 16) {
+    	   cout << '\r' << operations * 100 / HEIGHT << '%';
+    	}
+
         for (int x = 0; x < WIDTH; ++x) {
             double re = RE_START + x * x_factor;
             double im = IM_START + y * y_factor;
@@ -92,7 +106,10 @@ int main()
     auto end = chrono::high_resolution_clock::now();
     auto millis = chrono::duration_cast<chrono::milliseconds>(end - start).count();
 
+    cout << '\r' << "100%" << '\n' << "Mandelbrot computed, time delayed: " << millis / 1000 << "s " << millis % 1000 << "ms" << endl;
+    cout << "Writing mandelbrot.bmp to disk..." << endl;
+
     image.Write();
 
-    cout << "mandelbrot.bmp saved, time delayed: " << millis / 1000 << "s " << millis % 1000 << "ms" << endl;
+    cout << "mandelbrot.bmp saved succesfully." << endl;
 }
