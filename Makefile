@@ -1,2 +1,2 @@
 all:
-	g++ main.cc -static -std=c++11 -fopenmp
+	g++ -static main.cc -static -std=c++11 -fopenmp
